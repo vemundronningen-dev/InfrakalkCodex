@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ResourceCategory {
+  TIMER
+  MASKINER
+  MATERIALER
+  UE
+  UTSTYR
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  SUBMITTED
+  EXPIRED
+}
+
+enum BidPackageStatus {
+  DRAFT
+  SENT
+  SUBMITTED
+  REVIEWED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  passwordHash  String?
+  companyId     String
+  company       Company   @relation(fields: [companyId], references: [id])
+  projects      Project[]
+  createdAt     DateTime  @default(now())
+}
+
+model Company {
+  id        String    @id @default(cuid())
+  name      String
+  orgNumber String?
+  teams     Team[]
+  users     User[]
+  projects  Project[]
+}
+
+model Team {
+  id        String    @id @default(cuid())
+  name      String
+  companyId String
+  company   Company   @relation(fields: [companyId], references: [id])
+  projects  Project[]
+}
+
+model Project {
+  id                  String                @id @default(cuid())
+  name                String
+  description         String?
+  teamId              String
+  companyId           String
+  createdById         String
+  team                Team                  @relation(fields: [teamId], references: [id])
+  company             Company               @relation(fields: [companyId], references: [id])
+  createdBy           User                  @relation(fields: [createdById], references: [id])
+  chapters            Chapter[]
+  priceItems          PriceItem[]
+  invitations         ExternalInvitation[]
+  bidPackages         BidPackage[]
+  createdAt           DateTime              @default(now())
+}
+
+model Chapter {
+  id          String      @id @default(cuid())
+  projectId   String
+  parentId    String?
+  code        String
+  title       String
+  level       Int
+  sortOrder   Int
+  project     Project     @relation(fields: [projectId], references: [id])
+  parent      Chapter?    @relation("ChapterTree", fields: [parentId], references: [id])
+  children    Chapter[]   @relation("ChapterTree")
+  priceItems  PriceItem[]
+
+  @@index([projectId, sortOrder])
+}
+
+model PriceItem {
+  id                   String                 @id @default(cuid())
+  projectId            String
+  chapterId            String?
+  postNumber           String
+  nsCode               String?
+  nsRevision           String?
+  heading              String
+  quantity             Decimal                @default(0)
+  unit                 String?
+  quantityRule         String?
+  isPriced             Boolean                @default(false)
+  costTotal            Decimal                @default(0)
+  salesMode            String                 @default("manual")
+  salesPrice           Decimal                @default(0)
+  markupPercent        Decimal                @default(0)
+  project              Project                @relation(fields: [projectId], references: [id])
+  chapter              Chapter?               @relation(fields: [chapterId], references: [id])
+  description          PriceItemDescription?
+  resourceLines        ResourceLine[]
+  purchaseLines        PurchaseLine[]
+  bidPackageItems      BidPackageItem[]
+
+  @@index([projectId, postNumber])
+}
+
+model PriceItemDescription {
+  id             String                   @id @default(cuid())
+  priceItemId    String                   @unique
+  nsCode         String?
+  nsRevision     String?
+  heading        String?
+  rawXml         String?
+  displayText    String?
+  priceItem      PriceItem                @relation(fields: [priceItemId], references: [id])
+  keywords       PriceItemKeyword[]
+  matrixValues   PriceItemMatrixValue[]
+  requirements   PriceItemRequirement[]
+}
+
+model PriceItemKeyword {
+  id             String                  @id @default(cuid())
+  descriptionId  String
+  label          String
+  value          String
+  description    PriceItemDescription    @relation(fields: [descriptionId], references: [id])
+}
+
+model PriceItemMatrixValue {
+  id             String                  @id @default(cuid())
+  descriptionId  String
+  label          String
+  value          String
+  description    PriceItemDescription    @relation(fields: [descriptionId], references: [id])
+}
+
+model PriceItemRequirement {
+  id             String                  @id @default(cuid())
+  descriptionId  String
+  type           String
+  heading        String?
+  text           String?
+  rtf            String?
+  description    PriceItemDescription    @relation(fields: [descriptionId], references: [id])
+}
+
+model ResourceLine {
+  id           String           @id @default(cuid())
+  priceItemId  String
+  name         String
+  category     ResourceCategory
+  unit         String
+  quantity     Decimal          @default(0)
+  unitCost     Decimal          @default(0)
+  totalCost    Decimal          @default(0)
+  priceItem    PriceItem        @relation(fields: [priceItemId], references: [id])
+}
+
+model PurchaseLine {
+  id           String    @id @default(cuid())
+  priceItemId  String
+  itemNumber   String?
+  description  String
+  supplier     String?
+  quantity     Decimal   @default(0)
+  grossPrice   Decimal   @default(0)
+  discount     Decimal   @default(0)
+  netPrice     Decimal   @default(0)
+  totalCost    Decimal   @default(0)
+  priceItem    PriceItem @relation(fields: [priceItemId], references: [id])
+}
+
+model ResourceTemplate {
+  id          String            @id @default(cuid())
+  companyId   String?
+  name        String
+  category    ResourceCategory
+  defaultUnit String
+  defaultCost Decimal           @default(0)
+}
+
+model ExternalCompany {
+  id            String                 @id @default(cuid())
+  name          String
+  orgNumber     String?
+  contactName   String?
+  email         String
+  invitations   ExternalInvitation[]
+  bidPackages   BidPackage[]
+}
+
+model ExternalInvitation {
+  id                String              @id @default(cuid())
+  projectId         String
+  externalCompanyId String
+  email             String
+  token             String              @unique
+  status            InvitationStatus    @default(PENDING)
+  dueDate           DateTime
+  createdAt         DateTime            @default(now())
+  project           Project             @relation(fields: [projectId], references: [id])
+  externalCompany   ExternalCompany     @relation(fields: [externalCompanyId], references: [id])
+}
+
+model BidPackage {
+  id                String            @id @default(cuid())
+  projectId         String
+  externalCompanyId String
+  title             String
+  description       String?
+  dueDate           DateTime
+  status            BidPackageStatus  @default(SENT)
+  project           Project           @relation(fields: [projectId], references: [id])
+  externalCompany   ExternalCompany   @relation(fields: [externalCompanyId], references: [id])
+  items             BidPackageItem[]
+}
+
+model BidPackageItem {
+  id             String            @id @default(cuid())
+  bidPackageId   String
+  priceItemId    String
+  bidPackage     BidPackage        @relation(fields: [bidPackageId], references: [id])
+  priceItem      PriceItem         @relation(fields: [priceItemId], references: [id])
+  submissions    BidSubmission[]
+}
+
+model BidSubmission {
+  id              String         @id @default(cuid())
+  bidPackageItemId String
+  unitPrice       Decimal        @default(0)
+  totalPrice      Decimal        @default(0)
+  comment         String?
+  attachmentUrl   String?
+  submittedAt     DateTime?
+  status          String         @default("draft")
+  bidPackageItem  BidPackageItem @relation(fields: [bidPackageItemId], references: [id])
+}
