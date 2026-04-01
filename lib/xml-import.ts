@@ -1,47 +1,25 @@
 import { XMLParser } from "fast-xml-parser";
 
-type ParsedNode = Record<string, unknown>;
+type AnyRecord = Record<string, any>;
 
-type DescriptionPart = {
-  nsCode: string | null;
-  nsRevision: string | null;
-  heading: string | null;
-  rawXml: string;
-  displayText: string;
-  keywords: Array<{ label: string; value: string }>;
-  matrixValues: Array<{ label: string; value: string }>;
-  requirements: Array<{ type: string; heading: string | null; text: string | null; rtf: string | null }>;
-};
-
-type ParsedItem = {
-  postNumber: string;
-  nsCode: string | null;
-  nsRevision: string | null;
-  heading: string;
-  quantity: number;
-  unit: string | null;
-  quantityRule: string | null;
-  description: DescriptionPart;
-};
-
-export function parseNs3459(xmlText: string): { chapters: Array<{ code: string; title: string; level: number; sortOrder: number }>; items: ParsedItem[] } {
+export function parseNs3459(xmlText: string) {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
-  const parsed = parser.parse(xmlText) as ParsedNode;
+  const parsed = parser.parse(xmlText) as AnyRecord;
 
-  const root = asRecord(parsed.ProsjektNS) ?? parsed;
-  const planNodes = toArray(asRecord(root.Postnrplan)?.Post ?? root.Postnrplan).map(asRecord).filter(Boolean) as ParsedNode[];
-  const posterNodes = toArray(asRecord(root.Poster)?.Post ?? root.Poster).map(asRecord).filter(Boolean) as ParsedNode[];
+  const root = parsed.ProsjektNS ?? parsed;
+  const planNodes = toArray(root.Postnrplan?.Post ?? root.Postnrplan ?? []);
+  const posterNodes = toArray(root.Poster?.Post ?? root.Poster ?? []);
 
-  const chapters = planNodes.map((node, index) => ({
+  const chapters = planNodes.map((node: AnyRecord, index: number) => ({
     code: String(node.Postnr ?? node.postnr ?? `K${index + 1}`),
     title: String(node.Tekst ?? node.Kodetekst ?? "Uten tittel"),
     level: depthFromCode(String(node.Postnr ?? "")),
     sortOrder: index + 1
   }));
 
-  const items = posterNodes.map((node) => {
+  const items = posterNodes.map((node: AnyRecord) => {
     const description = node.Beskrivelse ?? node.Kodetekst ?? "";
-    const prisinfo = asRecord(node.Prisinfo) ?? {};
+    const prisinfo = node.Prisinfo ?? {};
 
     return {
       postNumber: String(node.Postnr ?? ""),
@@ -59,15 +37,12 @@ export function parseNs3459(xmlText: string): { chapters: Array<{ code: string; 
         displayText: String(description),
         keywords: extractPairs(node.Nokkelord),
         matrixValues: extractPairs(node.Matrise),
-        requirements: toArray(node.Krav)
-          .map(asRecord)
-          .filter(Boolean)
-          .map((k) => ({
-            type: String(k.Type ?? "generell"),
-            heading: valueOrNull(k.Overskrift),
-            text: valueOrNull(k.Tekst),
-            rtf: valueOrNull(k.Rtf)
-          }))
+        requirements: toArray(node.Krav).map((k: AnyRecord) => ({
+          type: String(k.Type ?? "generell"),
+          heading: valueOrNull(k.Overskrift),
+          text: valueOrNull(k.Tekst),
+          rtf: valueOrNull(k.Rtf)
+        }))
       }
     };
   });
@@ -75,17 +50,14 @@ export function parseNs3459(xmlText: string): { chapters: Array<{ code: string; 
   return { chapters, items };
 }
 
-function extractPairs(input: unknown) {
-  return toArray(input)
-    .map(asRecord)
-    .filter(Boolean)
-    .map((entry) => ({
-      label: String(entry.Label ?? entry.Navn ?? ""),
-      value: String(entry.Value ?? entry.Verdi ?? "")
-    }));
+function extractPairs(input: any) {
+  return toArray(input).map((entry: any) => ({
+    label: String(entry.Label ?? entry.Navn ?? ""),
+    value: String(entry.Value ?? entry.Verdi ?? "")
+  }));
 }
 
-function toArray(value: unknown): unknown[] {
+function toArray<T>(value: T | T[]): T[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
 }
@@ -97,9 +69,4 @@ function depthFromCode(code: string) {
 function valueOrNull(value: unknown) {
   if (value === undefined || value === null || value === "") return null;
   return String(value);
-}
-
-function asRecord(value: unknown): ParsedNode | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as ParsedNode;
 }

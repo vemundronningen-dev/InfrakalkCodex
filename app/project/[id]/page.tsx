@@ -16,25 +16,6 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   if (!project) return <main className="p-8">Project not found</main>;
 
-  const itemRows = project.priceItems.map((item) => ({
-    id: item.id,
-    postNumber: item.postNumber,
-    heading: item.heading,
-    quantity: item.quantity.toString(),
-    unit: item.unit,
-    costTotal: item.costTotal.toString(),
-    salesPrice: item.salesPrice.toString(),
-    description: item.description ? { displayText: item.description.displayText } : null
-  }));
-
-  const templateRows = templates.map((template) => ({
-    id: template.id,
-    name: template.name,
-    category: template.category,
-    defaultUnit: template.defaultUnit,
-    defaultCost: template.defaultCost.toString()
-  }));
-
   return (
     <main className="mx-auto max-w-7xl space-y-6 p-8">
       <h1 className="text-3xl font-bold">{project.name}</h1>
@@ -43,7 +24,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       <section className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-3">
           <h2 className="text-xl font-semibold">Price items</h2>
-          <PriceItemTable projectId={project.id} items={itemRows} templates={templateRows} />
+          <PriceItemTable projectId={project.id} items={project.priceItems as any} templates={templates as any} />
           <div className="flex gap-2">
             <a href={`/api/projects/${project.id}/export/pdf`} className="rounded bg-emerald-700 px-3 py-2 text-white">Export PDF</a>
             <a href={`/api/projects/${project.id}/export/xml`} className="rounded bg-slate-700 px-3 py-2 text-white">Export XML</a>
